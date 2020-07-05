@@ -1,6 +1,11 @@
 package it.multicoredev.discord;
 
+import net.dv8tion.jda.api.entities.Member;
+import net.dv8tion.jda.api.entities.Role;
 import net.dv8tion.jda.api.entities.TextChannel;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Copyright © 2020 by Lorenzo Magni
@@ -38,5 +43,20 @@ public class Utils {
 
     public static void sendMessage(TextChannel channel, String msg, String target, String replacement) {
         sendMessage(channel, msg, new String[]{target}, new String[]{replacement});
+    }
+
+    public static boolean hasRole(Member member, String... roles) {
+        if (roles == null || roles.length == 0 || (roles.length == 1 && roles[0].isEmpty())) return true;
+
+        List<String> rolesLowered = new ArrayList<>();
+        for (String role : roles) {
+            rolesLowered.add(role.toLowerCase());
+        }
+
+        for (Role role : member.getRoles()) {
+            if (rolesLowered.contains(role.getName())) return true;
+        }
+
+        return false;
     }
 }

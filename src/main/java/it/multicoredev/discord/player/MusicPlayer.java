@@ -7,11 +7,14 @@ import com.sedmelluq.discord.lavaplayer.source.AudioSourceManagers;
 import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
+import it.multicoredev.discord.Utils;
+import it.multicoredev.mclib.yaml.Configuration;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.TextChannel;
 import net.dv8tion.jda.api.entities.VoiceChannel;
 import net.dv8tion.jda.api.managers.AudioManager;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,10 +40,12 @@ import java.util.Map;
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 public class MusicPlayer {
+    private final Configuration config;
     private AudioPlayerManager playerManager;
     private Map<Long, GuildMusicManager> musicManagers;
 
-    public MusicPlayer() {
+    public MusicPlayer(Configuration config) {
+        this.config = config;
         musicManagers = new HashMap<>();
         playerManager = new DefaultAudioPlayerManager();
 
@@ -74,16 +79,26 @@ public class MusicPlayer {
     private void play(Guild guild, GuildMusicManager musicManager, AudioTrack track) {
         connectToFirstVoiceChannel(guild.getAudioManager());
 
-        musicManager.scheduler.queue(track);
+        musicManager.scheduler.queueAndPlay(track);
     }
 
-    public void loadAndPlay(final TextChannel channel, final String trackUrl) {
+    public void play(Guild guild) {
+        GuildMusicManager musicManager = getGuildAudioPlayer(guild);
+
+        musicManager.scheduler.playFirst();
+    }
+
+    public void loadAndPlay(TextChannel channel, String url) {
         GuildMusicManager musicManager = getGuildAudioPlayer(channel.getGuild());
 
-        playerManager.loadItemOrdered(musicManager, trackUrl, new AudioLoadResultHandler() {
+        playerManager.loadItemOrdered(musicManager, url, new AudioLoadResultHandler() {
             @Override
             public void trackLoaded(AudioTrack track) {
-                channel.sendMessage("Adding to queue " + track.getInfo().title).queue();
+                if (musicManager.player.getPlayingTrack() == null) {
+                    Utils.sendMessage(channel, config.getString("messages.play"), new String[]{"{track}", "{author}"}, new String[]{track.getInfo().title, track.getInfo().author});
+                } else {
+                    Utils.sendMessage(channel, config.getString("messages.playlist-add"), new String[]{"{track}", "{author}"}, new String[]{track.getInfo().title, track.getInfo().author});
+                }
 
                 play(channel.getGuild(), musicManager, track);
             }
@@ -94,17 +109,40 @@ public class MusicPlayer {
                     play(channel.getGuild(), musicManager, track);
                 }
 
-                channel.sendMessage("Playing first track " + playlist.getSelectedTrack().getInfo().title + " from playlist " + playlist.getName() + " (added to queue)").queue();
+                Utils.sendMessage(channel, config.getString("messages.playlist-add-playlist"), "{playlist}", playlist.getName());
             }
 
             @Override
             public void noMatches() {
-                channel.sendMessage("Nothing found by " + trackUrl).queue();
+                Utils.sendMessage(channel, config.getString("messages.not-found"));
             }
 
             @Override
             public void loadFailed(FriendlyException exception) {
-                channel.sendMessage("Could not play: " + exception.getMessage()).queue();
+                Utils.sendMessage(channel, config.getString("messages.not-loaded"));
+            }
+        });
+    }
+
+    public void addToPlaylist(Guild guild, String url) {
+        GuildMusicManager musicManager = getGuildAudioPlayer(guild);
+
+        playerManager.loadItemOrdered(musicManager, url, new AudioLoadResultHandler() {
+            @Override
+            public void trackLoaded(AudioTrack track) {
+                musicManager.scheduler.queue(track);
+            }
+
+            @Override
+            public void playlistLoaded(AudioPlaylist playlist) {
+            }
+
+            @Override
+            public void noMatches() {
+            }
+
+            @Override
+            public void loadFailed(FriendlyException exception) {
             }
         });
     }
@@ -113,7 +151,7 @@ public class MusicPlayer {
         GuildMusicManager musicManager = getGuildAudioPlayer(channel.getGuild());
         musicManager.scheduler.nextTrack();
 
-        channel.sendMessage("Skipped to next track.").queue();
+        Utils.sendMessage(channel, config.getString("messages.skip"));
     }
 
     public void playPause(TextChannel channel) {
@@ -121,40 +159,79 @@ public class MusicPlayer {
 
         if (!musicManager.player.isPaused()) {
             musicManager.player.setPaused(true);
-            //TODO
+            Utils.sendMessage(channel, config.getString("messages.pause"));
         } else {
             musicManager.player.setPaused(false);
-            //TODO
+            Utils.sendMessage(channel, config.getString("messages.resume"));
         }
     }
 
     public void stop(TextChannel channel) {
         GuildMusicManager musicManager = getGuildAudioPlayer(channel.getGuild());
-
         musicManager.player.stopTrack();
+
+        Utils.sendMessage(channel, config.getString("messages.stop"));
     }
 
     public void emptyPlaylist(TextChannel channel) {
+        GuildMusicManager musicManager = getGuildAudioPlayer(channel.getGuild());
 
+        musicManager.scheduler.empty();
+        Utils.sendMessage(channel, config.getString("messages.empty"));
     }
 
-    public void setVolume(final TextChannel channel, int volume) {
+    public void setVolume(TextChannel channel, int volume) {
         if (volume > 100) volume = 100;
         else if (volume < 0) volume = 0;
 
         GuildMusicManager musicManager = getGuildAudioPlayer(channel.getGuild());
         musicManager.player.setVolume(volume);
+
+        Utils.sendMessage(channel, config.getString("messages.volume"), "{volume}", String.valueOf(volume));
     }
 
-    public void loop() {
+    public void loop(TextChannel channel) {
+        GuildMusicManager musicManager = getGuildAudioPlayer(channel.getGuild());
 
+        musicManager.scheduler.updateLooping();
+
+        config.set("guilds." + channel.getGuild().getId() + ".loop", musicManager.scheduler.isLooping());
+
+        if (musicManager.scheduler.isLooping()) {
+            Utils.sendMessage(channel, config.getString("messages.loop-on"));
+        } else {
+            Utils.sendMessage(channel, config.getString("messages.loop-off"));
+        }
     }
 
-    public List<AudioTrack> getPlaylist(Guild guild) {
-        return null;
+    public void setLooping(Guild guild, boolean loop) {
+        GuildMusicManager musicManager = getGuildAudioPlayer(guild);
+
+        musicManager.scheduler.setLooping(loop);
     }
 
-    public List<String> getPlaylistSrc(Guild guild) {
-        return null;
+    public AudioTrack getPlayingTrack(TextChannel channel) {
+        GuildMusicManager musicManager = getGuildAudioPlayer(channel.getGuild());
+
+        return musicManager.player.getPlayingTrack();
+    }
+
+    public List<AudioTrack> getPlaylist(TextChannel channel) {
+        GuildMusicManager musicManager = getGuildAudioPlayer(channel.getGuild());
+
+        return musicManager.scheduler.getPlaylist();
+    }
+
+    public List<String> getPlaylistSrc(TextChannel channel) {
+        GuildMusicManager musicManager = getGuildAudioPlayer(channel.getGuild());
+
+        List<AudioTrack> playlist = musicManager.scheduler.getPlaylist();
+        List<String> srcs = new ArrayList<>();
+
+        for (AudioTrack track : playlist) {
+            srcs.add(track.getInfo().uri);
+        }
+
+        return srcs;
     }
 }

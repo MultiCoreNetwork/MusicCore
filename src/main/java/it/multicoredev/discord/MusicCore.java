@@ -5,10 +5,16 @@ import it.multicoredev.mclib.yaml.Configuration;
 import net.dv8tion.jda.api.AccountType;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
+import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.entities.VoiceChannel;
+import net.dv8tion.jda.api.managers.AudioManager;
 
 import javax.security.auth.login.LoginException;
 import java.io.File;
 import java.io.IOException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Copyright © 2020 by Lorenzo Magni
@@ -52,7 +58,7 @@ public class MusicCore {
             System.exit(-1);
         }
 
-        player = new MusicPlayer();
+        player = new MusicPlayer(config);
 
         try {
             jda = new JDABuilder(AccountType.BOT)
@@ -64,5 +70,43 @@ public class MusicCore {
             e.printStackTrace();
             System.exit(-1);
         }
+
+        for (String id : config.getSection("guilds").getKeys()) {
+            String path = "guilds." + id + ".";
+
+            Guild guild = jda.getGuildById(id);
+            if (guild == null) continue;
+
+            boolean start = false;
+
+            if (config.getBoolean(path + "autostart")) {
+                String channelId = config.getString(path + "channel");
+
+                VoiceChannel channel = guild.getVoiceChannelById(channelId);
+                if (channel == null) continue;
+
+                AudioManager audioManager = channel.getGuild().getAudioManager();
+                if (audioManager.isAttemptingToConnect()) continue;
+
+                audioManager.openAudioConnection(channel);
+                start = true;
+            }
+
+            if (config.contains(path + "playlist")) {
+                for (String url : config.getStringList(path + "playlist")) {
+                    player.addToPlaylist(guild, url);
+                }
+            }
+
+            if (config.contains(path + "loop")) {
+                player.setLooping(guild, config.getBoolean(path + "loop"));
+            }
+
+            if (start) {
+                ScheduledExecutorService runLater = Executors.newSingleThreadScheduledExecutor();
+                runLater.schedule(() -> player.play(guild), 2, TimeUnit.SECONDS);
+            }
+        }
+
     }
 }

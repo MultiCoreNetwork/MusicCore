@@ -5,6 +5,8 @@ import com.sedmelluq.discord.lavaplayer.player.event.AudioEventAdapter;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackEndReason;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -38,16 +40,57 @@ public class TrackScheduler extends AudioEventAdapter {
         this.queue = new LinkedBlockingQueue<>();
     }
 
-    public boolean queue(AudioTrack track) {
+    public void queue(AudioTrack track) {
+        queue.offer(track);
+    }
+
+    public void queueAndPlay(AudioTrack track) {
         if (!player.startTrack(track, true)) {
             queue.offer(track);
-            return false;
         }
-        return true;
+    }
+
+    public void playFirst() {
+        if (loop) {
+            AudioTrack track = queue.poll();
+            if (track == null) return;
+            player.startTrack(track, false);
+            queue.offer(track.makeClone());
+        } else {
+            player.startTrack(queue.poll(), false);
+        }
     }
 
     public void nextTrack() {
-        player.startTrack(queue.poll(), false);
+        if (loop) {
+            AudioTrack track = queue.poll();
+            if (track == null) return;
+            player.startTrack(track, false);
+            queue.offer(track.makeClone());
+        } else {
+            player.startTrack(queue.poll(), false);
+        }
+    }
+
+    public List<AudioTrack> getPlaylist() {
+        return new ArrayList<>(queue);
+    }
+
+    public void empty() {
+        player.stopTrack();
+        queue.clear();
+    }
+
+    public void setLooping(boolean loop) {
+        this.loop = loop;
+    }
+
+    public void updateLooping() {
+        loop = !loop;
+    }
+
+    public boolean isLooping() {
+        return loop;
     }
 
     @Override

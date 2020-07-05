@@ -58,18 +58,22 @@ public class BotListener extends ListenerAdapter {
     }
 
     private void dispatchCommand(GuildMessageReceivedEvent event, TextChannel channel, String command, String[] args) {
-        //TODO Check permissions
+        Member member = event.getMember();
+
+        if (member == null) {
+            Utils.sendMessage(channel, config.getString("messages.internal-error"));
+            Utils.sendMessage(channel, "*Member is null.*");
+            return;
+        }
+
         if (command.equals(getString("commands.join"))) {
-            if (!channel.getGuild().getSelfMember().hasPermission(channel, Permission.VOICE_CONNECT)) {
+            if (!Utils.hasRole(member, config.getString("permissions.join"))) {
                 Utils.sendMessage(channel, config.getString("messages.insufficient-perms"));
                 return;
             }
 
-            Member member = event.getMember();
-
-            if (member == null) {
-                Utils.sendMessage(channel, config.getString("messages.internal-error"));
-                Utils.sendMessage(channel, "*Member is null.*");
+            if (!channel.getGuild().getSelfMember().hasPermission(channel, Permission.VOICE_CONNECT)) {
+                Utils.sendMessage(channel, config.getString("messages.insufficient-join-perm"));
                 return;
             }
 
@@ -99,6 +103,11 @@ public class BotListener extends ListenerAdapter {
             audioManager.openAudioConnection(voiceChannel);
             Utils.sendMessage(channel, config.getString("messages.channel-join"), "{channel}", voiceChannel.getName());
         } else if (command.equals(getString("commands.leave"))) {
+            if (!Utils.hasRole(member, config.getString("permissions.leave"))) {
+                Utils.sendMessage(channel, config.getString("messages.insufficient-perms"));
+                return;
+            }
+
             GuildVoiceState voiceState = channel.getGuild().getSelfMember().getVoiceState();
 
             if (voiceState == null) {
@@ -117,6 +126,11 @@ public class BotListener extends ListenerAdapter {
             channel.getGuild().getAudioManager().closeAudioConnection();
             Utils.sendMessage(channel, config.getString("messages.channel-leave"));
         } else if (command.equals(getString("commands.volume"))) {
+            if (!Utils.hasRole(member, config.getString("permissions.volume"))) {
+                Utils.sendMessage(channel, config.getString("messages.insufficient-perms"));
+                return;
+            }
+
             if (args.length < 1) {
                 Utils.sendMessage(channel, config.getString("messages.incorrect-usage"));
                 return;
@@ -131,33 +145,108 @@ public class BotListener extends ListenerAdapter {
 
             player.setVolume(channel, volume);
         } else if (command.equals(getString("commands.play"))) {
+            if (!Utils.hasRole(member, config.getString("permissions.play"))) {
+                Utils.sendMessage(channel, config.getString("messages.insufficient-perms"));
+                return;
+            }
+
             if (args.length == 1) {
                 player.loadAndPlay(channel, args[0]);
             } else if (args.length == 0) {
-                //TODO check if is paused then resume or if is stopped then start playing
+                player.play(channel.getGuild());
             } else {
                 Utils.sendMessage(channel, config.getString("messages.incorrect-usage"));
             }
         } else if (command.equals(getString("commands.pause"))) {
+            if (!Utils.hasRole(member, config.getString("permissions.pause"))) {
+                Utils.sendMessage(channel, config.getString("messages.insufficient-perms"));
+                return;
+            }
+
             player.playPause(channel);
         } else if (command.equals(getString("commands.skip"))) {
+            if (!Utils.hasRole(member, config.getString("permissions.skip"))) {
+                Utils.sendMessage(channel, config.getString("messages.insufficient-perms"));
+                return;
+            }
+
             player.skipTrack(channel);
         } else if (command.equals(getString("commands.stop"))) {
+            if (!Utils.hasRole(member, config.getString("permissions.stop"))) {
+                Utils.sendMessage(channel, config.getString("messages.insufficient-perms"));
+                return;
+            }
+
             player.stop(channel);
+        } else if (command.equals(getString("commands.info"))) {
+            if (!Utils.hasRole(member, config.getString("permissions.info"))) {
+                Utils.sendMessage(channel, config.getString("messages.insufficient-perms"));
+                return;
+            }
+
+            AudioTrack track = player.getPlayingTrack(channel);
+
+            if (track == null) {
+                Utils.sendMessage(channel, config.getString("messages.not-playing"));
+            } else {
+                Utils.sendMessage(channel, config.getString("messages.play"), new String[]{"{track}", "{author}"}, new String[]{track.getInfo().title, track.getInfo().author});
+            }
         } else if (command.equals(getString("commands.empty"))) {
+            if (!Utils.hasRole(member, config.getString("permissions.empty"))) {
+                Utils.sendMessage(channel, config.getString("messages.insufficient-perms"));
+                return;
+            }
+
             player.emptyPlaylist(channel);
         } else if (command.equals(getString("commands.loop"))) {
-            player.loop();
+            if (!Utils.hasRole(member, config.getString("permissions.loop"))) {
+                Utils.sendMessage(channel, config.getString("messages.insufficient-perms"));
+                return;
+            }
+
+            player.loop(channel);
         } else if (command.equals(getString("commands.save"))) {
-            config.set("playlist", player.getPlaylistSrc(channel.getGuild()));
+            if (!Utils.hasRole(member, config.getString("permissions.save"))) {
+                Utils.sendMessage(channel, config.getString("messages.insufficient-perms"));
+                return;
+            }
+
+            config.set("guilds." + channel.getGuild().getId() + ".playlist", player.getPlaylistSrc(channel));
             Utils.sendMessage(channel, config.getString("messages.save"));
         } else if (command.equals(getString("commands.autostart"))) {
-            boolean autostart = config.getBoolean("autostart");
-            config.set("autostart", !autostart);
+            if (!Utils.hasRole(member, config.getString("permissions.autostart"))) {
+                Utils.sendMessage(channel, config.getString("messages.insufficient-perms"));
+                return;
+            }
+
+            boolean autostart = config.getBoolean("guilds." + channel.getGuild().getId() + ".autostart");
+            config.set("guilds." + channel.getGuild().getId() + ".autostart", !autostart);
+
+            GuildVoiceState voiceState = channel.getGuild().getSelfMember().getVoiceState();
+
+            if (voiceState == null) {
+                Utils.sendMessage(channel, config.getString("messages.internal-error"));
+                Utils.sendMessage(channel, "*GuildVoiceState is null.*");
+                return;
+            }
+
+            VoiceChannel voiceChannel = voiceState.getChannel();
+
+            if (voiceChannel == null) {
+                Utils.sendMessage(channel, config.getString("messages.not-connected"));
+                return;
+            }
+
+            config.set("guilds." + channel.getGuild().getId() + ".channel", voiceChannel.getId());
 
             Utils.sendMessage(channel, autostart ? config.getString("messages.autostart-off") : config.getString("messages.autostart-on"));
         } else if (command.equals(getString("commands.playlist"))) {
-            List<AudioTrack> playlist = player.getPlaylist(channel.getGuild());
+            if (!Utils.hasRole(member, config.getString("permissions.playlist"))) {
+                Utils.sendMessage(channel, config.getString("messages.insufficient-perms"));
+                return;
+            }
+
+            List<AudioTrack> playlist = player.getPlaylist(channel);
 
             for (AudioTrack track : playlist) {
                 Utils.sendMessage(channel, config.getString("messages.audio-track"),

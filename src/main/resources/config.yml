@@ -1,6 +1,4 @@
 bot-token: ""
-loop: false
-autostart: false
 
 commands:
   join: "!mjoin"
@@ -10,17 +8,36 @@ commands:
   pause: "!mpause"
   skip: "!mskip"
   stop: "!mstop"
+  info: "!minfo"
   empty: "!mempty"
   loop: "!mloop"
   save: "!msave"
   autostart: "!mauto"
   playlist: "!mplaylist"
 
+permissions:
+  join: []
+  leave: []
+  volume: []
+  play: []
+  pause: []
+  skip: []
+  stop: []
+  info: []
+  empty: []
+  loop: []
+  save: []
+  autostart: []
+  playlist: []
+
 messages:
   play: "Playing *{track}* by *{author}*..."
   pause: "Reproduction paused."
   resume: "Reproduction resumed."
   stop: "Reproduction stopped."
+  skip: "Track skipped."
+  volume: "Volume set to {volume}."
+  empty: "Playlist emptied."
   loop-on: "Playlist looping has been **enabled**."
   loop-off: "Playlist looping has been **disabled**."
   autostart-on: "Autostart has been **enabled**."
@@ -32,9 +49,11 @@ messages:
   channel-join: "Joined the channel {channel}."
   channel-leave: "Disconnected from channel {channel}."
   not-connected: "I'm not connected to any channel."
-  insufficient-perms: "I don't have permission to join this voice channel!"
+  not-found: "I can't find this track!"
+  not-loaded: "Can't load this track!"
+  not-playing: "I'm not playing anything!"
+  insufficient-join-perm: "I don't have permission to join this voice channel!"
+  insufficient-perms: "Insufficient permissions!"
   incorrect-usage: "Incorrect usage."
   internal-error: "**An error has occurred!**"
   chill-my-friend: "The bot is already trying to connect! Chill my friend!"
-
-playlist: []
